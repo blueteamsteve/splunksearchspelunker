@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Splunk Search Explorer</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%23B8650A'/><g transform='translate(8 8) scale(0.7)' fill='none' stroke='%2307090F' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'><circle cx='11' cy='11' r='8'/><path d='M21 21l-4.35-4.35'/></g></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500&display=swap" rel="stylesheet">
@@ -126,7 +127,7 @@
     /* Filters */
     .filter-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 
-    /* ─── App multiselect dropdown ───────────────────── */
+    /* ─── Filter multiselect dropdowns ─────────────────── */
     .ms-wrap { position: relative; flex-shrink: 0; }
     .ms-btn {
       background: var(--surface);
@@ -139,12 +140,14 @@
       cursor: pointer;
       transition: border-color 0.15s;
       white-space: nowrap;
+      text-align: left;
+      appearance: none;
       background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6' fill='none' stroke='%236B5C44' stroke-width='1.5'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 8px center;
-      text-align: left;
     }
     .ms-btn:hover, .ms-btn.open { border-color: var(--border-hi); }
+    .ms-btn:focus { outline: none; border-color: var(--amber); }
     .ms-btn.active { border-color: var(--amber); color: var(--amber); }
     .ms-menu {
       position: absolute;
@@ -159,6 +162,7 @@
       display: none;
     }
     .ms-menu.open { display: block; }
+    .ms-menu.ms-menu-right { left: auto; right: 0; }
     .ms-controls {
       display: flex; align-items: center; gap: 6px;
       padding: 8px 10px;
@@ -195,24 +199,14 @@
       width: 13px; height: 13px; flex-shrink: 0; cursor: pointer;
     }
     .ms-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    select {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 6px 10px;
-      border-radius: 4px;
-      font-family: var(--font-ui);
-      font-size: 0.85rem;
-      cursor: pointer;
-      transition: border-color 0.15s;
-      appearance: none;
-      padding-right: 24px;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6' fill='none' stroke='%235A7499' stroke-width='1.5'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 8px center;
+    .ms-item .ms-count {
+      margin-left: auto;
+      flex-shrink: 0;
+      color: var(--dim);
+      font-size: 0.72rem;
+      font-variant-numeric: tabular-nums;
     }
-    select:focus { outline: none; border-color: var(--amber); }
-    option { background: #FDFAF4; }
+    .ms-item.hidden-zero { display: none; }
 
     /* View toggle */
     .view-toggle { display: flex; gap: 2px; flex-shrink: 0; }
@@ -794,7 +788,8 @@
       }
       .list-head-cell:nth-child(n+4),
       .list-row > *:nth-child(n+4) { display: none; }
-      .filter-row select:nth-child(n+3) { display: none; }
+      .filter-row > .ms-wrap:nth-child(4),
+      .filter-row > .ms-wrap:nth-child(5) { display: none; }
     }
     @media (max-width: 600px) {
       #header-inner { gap: 8px; }
@@ -827,53 +822,7 @@
       <input id="searchInput" type="text" placeholder="Search names, descriptions, SPL… (/ to focus)">
     </div>
 
-    <div class="filter-row">
-      <select id="statusFilter">
-        <option value="all">All Status</option>
-        <option value="enabled" selected>Enabled</option>
-        <option value="disabled">Disabled</option>
-      </select>
-      <select id="schedFilter">
-        <option value="all">All Types</option>
-        <option value="scheduled" selected>Scheduled</option>
-        <option value="unscheduled">Unscheduled</option>
-      </select>
-
-      <!-- App multiselect -->
-      <div class="ms-wrap" id="appMultiWrap">
-        <button class="ms-btn" id="appBtn" onclick="toggleAppMenu(event)">All Apps</button>
-        <div class="ms-menu" id="appMenu">
-          <div class="ms-controls">
-            <button class="ms-ctrl-btn" onclick="clearAppSelection()">Clear</button>
-            <input class="ms-search" id="appSearchInput" type="text" placeholder="Filter apps…" oninput="filterAppList()">
-          </div>
-          <div class="ms-list" id="appList"></div>
-        </div>
-      </div>
-
-      <select id="detTypeFilter">
-        <option value="all">Any Detection Type</option>
-        <option value="ebd">EBD</option>
-        <option value="fbd">FBD</option>
-        <option value="">Unset</option>
-      </select>
-      <select id="csEnabledFilter">
-        <option value="all">CS Enabled: Any</option>
-        <option value="1" selected>CS Enabled: Yes</option>
-        <option value="">CS Enabled: No</option>
-      </select>
-
-      <!-- Action multiselect -->
-      <div class="ms-wrap" id="actionMultiWrap">
-        <button class="ms-btn" id="actionBtn" onclick="toggleActionMenu(event)">Any Action</button>
-        <div class="ms-menu" id="actionMenu">
-          <div class="ms-controls">
-            <button class="ms-ctrl-btn" onclick="clearActionSelection()">Clear</button>
-          </div>
-          <div class="ms-list" id="actionList"></div>
-        </div>
-      </div>
-    </div>
+    <div class="filter-row" id="filter-row"></div>
 
     <div class="view-toggle">
       <button class="vtbtn on" id="btnList" onclick="setView('list')" title="List view">
@@ -1009,8 +958,6 @@ let VIEW = 'list';
 let PAGE = 1;
 let SELECTED = null;
 const PER_PAGE = 50;
-let selectedApps = new Set();
-let selectedActions = new Set();
 let COMPARE = [];
 let SORT = { col: null, dir: 1 }; // dir: 1=asc, -1=desc
 
@@ -1074,60 +1021,27 @@ function init(data) {
     };
   });
 
-  // Populate action multiselect
-  const allActionTypes = [...new Set(ALL.flatMap(s => s._actions))].sort();
-  const actionList = document.getElementById('actionList');
-  allActionTypes.forEach(type => {
-    const label = document.createElement('label');
-    label.className = 'ms-item';
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.value = type;
-    cb.addEventListener('change', () => {
-      if (cb.checked) selectedActions.add(type); else selectedActions.delete(type);
-      updateActionBtn(); applyFilters();
-    });
-    const span = document.createElement('span');
-    span.textContent = ACTION_LABELS[type] || type;
-    label.appendChild(cb); label.appendChild(span);
-    actionList.appendChild(label);
+  // Mount all filter facets into the filter row
+  const filterRow = document.getElementById('filter-row');
+  FACETS.forEach(f => {
+    f.selected = new Set(f.initial || []);
+    filterRow.appendChild(buildFacet(f));
+    populateFacetOptions(f);
+    updateFacetButton(f);
   });
 
-  // Populate app multiselect
-  const apps = [...new Set(ALL.map(s => s._app).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const appList = document.getElementById('appList');
-  apps.forEach(app => {
-    const label = document.createElement('label');
-    label.className = 'ms-item';
-    label.dataset.app = app.toLowerCase();
-    const cb = document.createElement('input');
-    cb.type = 'checkbox'; cb.value = app;
-    cb.addEventListener('change', () => {
-      if (cb.checked) selectedApps.add(app); else selectedApps.delete(app);
-      updateAppBtn(); applyFilters();
-    });
-    const span = document.createElement('span');
-    span.textContent = app;
-    label.appendChild(cb); label.appendChild(span);
-    appList.appendChild(label);
-  });
-
-  // Close menus when clicking outside
+  // Close any open menu when clicking outside its wrap
   document.addEventListener('click', e => {
-    if (!document.getElementById('appMultiWrap').contains(e.target)) {
-      document.getElementById('appMenu').classList.remove('open');
-      document.getElementById('appBtn').classList.remove('open');
-    }
-    if (!document.getElementById('actionMultiWrap').contains(e.target)) {
-      document.getElementById('actionMenu').classList.remove('open');
-      document.getElementById('actionBtn').classList.remove('open');
-    }
+    document.querySelectorAll('.ms-wrap').forEach(wrap => {
+      if (!wrap.contains(e.target)) {
+        wrap.querySelector('.ms-menu').classList.remove('open');
+        wrap.querySelector('.ms-btn').classList.remove('open');
+      }
+    });
   });
 
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 180));
-  ['statusFilter','schedFilter','detTypeFilter','csEnabledFilter'].forEach(id =>
-    document.getElementById(id).addEventListener('change', applyFilters)
-  );
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
@@ -1148,101 +1062,210 @@ function init(data) {
 // ─────────────────────────────────────────────────────────────
 // Filter + render
 // ─────────────────────────────────────────────────────────────
-function applyFilters() {
-  const q         = document.getElementById('searchInput').value.trim().toLowerCase();
-  const status    = document.getElementById('statusFilter').value;
-  const sched     = document.getElementById('schedFilter').value;
-  const detType   = document.getElementById('detTypeFilter').value;
-  const csEnabled = document.getElementById('csEnabledFilter').value;
+function buildMsItem({ value, label, onToggle }) {
+  const el = document.createElement('label');
+  el.className = 'ms-item';
+  const cb = document.createElement('input');
+  cb.type = 'checkbox';
+  cb.value = value;
+  cb.addEventListener('change', () => onToggle(cb.checked));
+  const text = document.createElement('span');
+  text.textContent = label;
+  const count = document.createElement('span');
+  count.className = 'ms-count';
+  el.appendChild(cb);
+  el.appendChild(text);
+  el.appendChild(count);
+  return el;
+}
 
-  FILTERED = ALL.filter(s => {
-    if (status === 'enabled'  && s._disabled)  return false;
-    if (status === 'disabled' && !s._disabled) return false;
-    if (sched === 'scheduled'   && !s._scheduled) return false;
-    if (sched === 'unscheduled' && s._scheduled)  return false;
-    if (selectedApps.size > 0 && !selectedApps.has(s._app)) return false;
-    if (selectedActions.size > 0 && !s._actions.some(a => selectedActions.has(a))) return false;
-    if (detType !== 'all' && s._det_type !== detType) return false;
-    if (csEnabled !== 'all' && s._cs_enabled !== csEnabled) return false;
+// Each facet: button + dropdown with checkboxes. Empty `selected` = no filter.
+// `get(s)` returns the value(s) that search contributes to this facet.
+const FACETS = [
+  { key: 'status',
+    defaultLabel: 'All Status',
+    labelOne: v => v === 'enabled' ? 'Enabled' : 'Disabled',
+    labelMany: n => n + ' states',
+    options: [{ value: 'enabled', label: 'Enabled' }, { value: 'disabled', label: 'Disabled' }],
+    initial: ['enabled'],
+    get: s => [s._disabled ? 'disabled' : 'enabled'] },
+  { key: 'sched',
+    defaultLabel: 'All Types',
+    labelOne: v => v === 'scheduled' ? 'Scheduled' : 'Unscheduled',
+    labelMany: n => n + ' types',
+    options: [{ value: 'scheduled', label: 'Scheduled' }, { value: 'unscheduled', label: 'Unscheduled' }],
+    initial: ['scheduled'],
+    get: s => [s._scheduled ? 'scheduled' : 'unscheduled'] },
+  { key: 'app',
+    defaultLabel: 'All Apps',
+    labelOne: v => v,
+    labelMany: n => n + ' apps',
+    options: () => [...new Set(ALL.map(s => s._app).filter(Boolean))].sort((a, b) => a.localeCompare(b)).map(a => ({ value: a, label: a })),
+    get: s => [s._app],
+    search: 'Filter apps…' },
+  { key: 'detType',
+    defaultLabel: 'Any Detection Type',
+    labelOne: v => ({ ebd: 'EBD', fbd: 'FBD', unset: 'Unset' })[v] || v,
+    labelMany: n => n + ' types',
+    options: [{ value: 'ebd', label: 'EBD' }, { value: 'fbd', label: 'FBD' }, { value: 'unset', label: 'Unset' }],
+    get: s => [s._det_type || 'unset'] },
+  { key: 'csEnabled',
+    defaultLabel: 'CS Enabled: Any',
+    labelOne: v => 'CS Enabled: ' + (v === 'yes' ? 'Yes' : 'No'),
+    labelMany: () => 'CS Enabled: Any',
+    options: [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }],
+    initial: ['yes'],
+    get: s => [s._cs_enabled === '1' ? 'yes' : 'no'] },
+  { key: 'action',
+    defaultLabel: 'Any Action',
+    labelOne: v => ACTION_LABELS[v] || v,
+    labelMany: n => n + ' actions',
+    options: () => [...new Set(ALL.flatMap(s => s._actions))].sort().map(a => ({ value: a, label: ACTION_LABELS[a] || a })),
+    get: s => s._actions,
+    menuRight: true },
+];
+const FACET_BY_KEY = Object.fromEntries(FACETS.map(f => [f.key, f]));
+
+function buildFacet(f) {
+  const wrap = document.createElement('div');
+  wrap.className = 'ms-wrap';
+
+  const btn = document.createElement('button');
+  btn.className = 'ms-btn';
+  btn.id = f.key + 'Btn';
+  btn.addEventListener('click', e => toggleFacetMenu(e, f.key));
+
+  const menu = document.createElement('div');
+  menu.className = 'ms-menu' + (f.menuRight ? ' ms-menu-right' : '');
+  menu.id = f.key + 'Menu';
+
+  const controls = document.createElement('div');
+  controls.className = 'ms-controls';
+  const clearBtn = document.createElement('button');
+  clearBtn.className = 'ms-ctrl-btn';
+  clearBtn.textContent = 'Clear';
+  clearBtn.addEventListener('click', () => clearFacetSelection(f.key));
+  controls.appendChild(clearBtn);
+  if (f.search) {
+    const input = document.createElement('input');
+    input.className = 'ms-search';
+    input.type = 'text';
+    input.placeholder = f.search;
+    input.id = f.key + 'SearchInput';
+    input.addEventListener('input', () => filterFacetList(f.key));
+    controls.appendChild(input);
+  }
+  menu.appendChild(controls);
+
+  const list = document.createElement('div');
+  list.className = 'ms-list';
+  list.id = f.key + 'List';
+  menu.appendChild(list);
+
+  wrap.appendChild(btn);
+  wrap.appendChild(menu);
+  return wrap;
+}
+
+function populateFacetOptions(f) {
+  const list = document.getElementById(f.key + 'List');
+  const options = typeof f.options === 'function' ? f.options() : f.options;
+  options.forEach(opt => {
+    const item = buildMsItem({
+      value: opt.value,
+      label: opt.label,
+      onToggle: checked => {
+        if (checked) f.selected.add(opt.value); else f.selected.delete(opt.value);
+        updateFacetButton(f);
+        applyFilters();
+      },
+    });
+    item.dataset.label = opt.label.toLowerCase();
+    if (f.selected.has(opt.value)) item.querySelector('input[type=checkbox]').checked = true;
+    list.appendChild(item);
+  });
+}
+
+function toggleFacetMenu(e, key) {
+  e.stopPropagation();
+  const menu = document.getElementById(key + 'Menu');
+  const btn  = document.getElementById(key + 'Btn');
+  const open = menu.classList.toggle('open');
+  btn.classList.toggle('open', open);
+  if (open && FACET_BY_KEY[key].search) document.getElementById(key + 'SearchInput').focus();
+}
+
+function clearFacetSelection(key) {
+  const f = FACET_BY_KEY[key];
+  f.selected.clear();
+  document.querySelectorAll(`#${key}List input[type=checkbox]`).forEach(cb => cb.checked = false);
+  updateFacetButton(f);
+  applyFilters();
+}
+
+function filterFacetList(key) {
+  const q = document.getElementById(key + 'SearchInput').value.toLowerCase();
+  document.querySelectorAll(`#${key}List .ms-item`).forEach(item => {
+    item.style.display = item.dataset.label.includes(q) ? '' : 'none';
+  });
+}
+
+function updateFacetButton(f) {
+  const btn = document.getElementById(f.key + 'Btn');
+  const size = f.selected.size;
+  if (size === 0) {
+    btn.textContent = f.defaultLabel;
+    btn.classList.remove('active');
+  } else if (size === 1) {
+    btn.textContent = f.labelOne([...f.selected][0]);
+    btn.classList.add('active');
+  } else {
+    btn.textContent = f.labelMany(size);
+    btn.classList.add('active');
+  }
+}
+
+// Predicate over all facets. skipKey lets facet-count computation exclude
+// its own filter so options don't disappear when selected.
+function makeFilterPredicate({ skipKey = null } = {}) {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  return s => {
+    for (const f of FACETS) {
+      if (f.key === skipKey || f.selected.size === 0) continue;
+      if (!f.get(s).some(v => f.selected.has(v))) return false;
+    }
     if (q) return s._name_lc.includes(q) || s._desc_lc.includes(q) || s._search_lc.includes(q) || s._author_lc.includes(q);
     return true;
-  });
+  };
+}
 
+function applyFilters() {
+  FILTERED = ALL.filter(makeFilterPredicate());
   PAGE = 1;
   sortFiltered();
   renderStats();
+  renderMultiselectCounts();
   renderPage();
 }
 
-// ─────────────────────────────────────────────────────────────
-// App multiselect helpers
-// ─────────────────────────────────────────────────────────────
-function toggleAppMenu(e) {
-  e.stopPropagation();
-  const menu = document.getElementById('appMenu');
-  const btn  = document.getElementById('appBtn');
-  const open = menu.classList.toggle('open');
-  btn.classList.toggle('open', open);
-  if (open) document.getElementById('appSearchInput').focus();
-}
-
-function updateAppBtn() {
-  const btn = document.getElementById('appBtn');
-  if (selectedApps.size === 0) {
-    btn.textContent = 'All Apps';
-    btn.classList.remove('active');
-  } else if (selectedApps.size === 1) {
-    btn.textContent = [...selectedApps][0];
-    btn.classList.add('active');
-  } else {
-    btn.textContent = selectedApps.size + ' apps';
-    btn.classList.add('active');
-  }
-}
-
-function clearAppSelection() {
-  selectedApps.clear();
-  document.querySelectorAll('#appList input[type=checkbox]').forEach(cb => cb.checked = false);
-  updateAppBtn(); applyFilters();
-}
-
-function filterAppList() {
-  const q = document.getElementById('appSearchInput').value.toLowerCase();
-  document.querySelectorAll('#appList .ms-item').forEach(item => {
-    item.style.display = item.dataset.app.includes(q) ? '' : 'none';
+function renderMultiselectCounts() {
+  FACETS.forEach(f => {
+    const counts = new Map();
+    ALL.filter(makeFilterPredicate({ skipKey: f.key })).forEach(s => {
+      f.get(s).forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+    });
+    updateFacetCounts(f.key + 'List', counts);
   });
 }
 
-// ─────────────────────────────────────────────────────────────
-// Action multiselect helpers
-// ─────────────────────────────────────────────────────────────
-function toggleActionMenu(e) {
-  e.stopPropagation();
-  const menu = document.getElementById('actionMenu');
-  const btn  = document.getElementById('actionBtn');
-  const open = menu.classList.toggle('open');
-  btn.classList.toggle('open', open);
-}
-
-function updateActionBtn() {
-  const btn = document.getElementById('actionBtn');
-  if (selectedActions.size === 0) {
-    btn.textContent = 'Any Action';
-    btn.classList.remove('active');
-  } else if (selectedActions.size === 1) {
-    const type = [...selectedActions][0];
-    btn.textContent = ACTION_LABELS[type] || type;
-    btn.classList.add('active');
-  } else {
-    btn.textContent = selectedActions.size + ' actions';
-    btn.classList.add('active');
-  }
-}
-
-function clearActionSelection() {
-  selectedActions.clear();
-  document.querySelectorAll('#actionList input[type=checkbox]').forEach(cb => cb.checked = false);
-  updateActionBtn(); applyFilters();
+function updateFacetCounts(listId, counts) {
+  document.querySelectorAll(`#${listId} .ms-item`).forEach(item => {
+    const cb = item.querySelector('input[type=checkbox]');
+    const count = counts.get(cb.value) || 0;
+    item.querySelector('.ms-count').textContent = count;
+    // Keep selected items visible even at 0 so users can deselect them.
+    item.classList.toggle('hidden-zero', count === 0 && !cb.checked);
+  });
 }
 
 // ─────────────────────────────────────────────────────────────
