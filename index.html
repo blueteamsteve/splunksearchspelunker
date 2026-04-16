@@ -785,7 +785,7 @@
     .cmp-val.null-val { color: var(--dim); font-style: italic; }
     .cmp-val.mono { font-family: var(--font-mono); font-size: 0.72rem; }
     #cmp-modal-body.diffs-only .cmp-row:not(.diff) { display: none; }
-    #cmp-modal-body.diffs-only .cmp-section-head:has(+ * .cmp-row.diff) { display: grid; }
+    #cmp-modal-body.diffs-only .cmp-section:not(:has(.cmp-row.diff)) { display: none; }
 
     /* Responsive */
     @media (max-width: 900px) {
@@ -844,15 +844,15 @@
         <button class="ms-btn" id="appBtn" onclick="toggleAppMenu(event)">All Apps</button>
         <div class="ms-menu" id="appMenu">
           <div class="ms-controls">
-            <button class="ms-ctrl-btn" onclick="appSelectAll()">All</button>
-            <button class="ms-ctrl-btn" onclick="appClearSel()">Clear</button>
+            <button class="ms-ctrl-btn" onclick="clearAppSelection()">All</button>
+            <button class="ms-ctrl-btn" onclick="clearAppSelection()">Clear</button>
             <input class="ms-search" id="appSearchInput" type="text" placeholder="Filter apps…" oninput="filterAppList()">
           </div>
           <div class="ms-list" id="appList"></div>
         </div>
       </div>
 
-<select id="detTypeFilter">
+      <select id="detTypeFilter">
         <option value="all">Any Detection Type</option>
         <option value="ebd">EBD</option>
         <option value="fbd">FBD</option>
@@ -869,8 +869,8 @@
         <button class="ms-btn" id="actionBtn" onclick="toggleActionMenu(event)">Any Action</button>
         <div class="ms-menu" id="actionMenu">
           <div class="ms-controls">
-            <button class="ms-ctrl-btn" onclick="actionSelectAll()">All</button>
-            <button class="ms-ctrl-btn" onclick="actionClearSel()">Clear</button>
+            <button class="ms-ctrl-btn" onclick="clearActionSelection()">All</button>
+            <button class="ms-ctrl-btn" onclick="clearActionSelection()">Clear</button>
           </div>
           <div class="ms-list" id="actionList"></div>
         </div>
@@ -1013,7 +1013,7 @@ let SELECTED = null;
 const PER_PAGE = 50;
 let selectedApps = new Set();
 let selectedActions = new Set();
-let COMPARE = []; // up to 2 search _ids
+let COMPARE = [];
 let SORT = { col: null, dir: 1 }; // dir: 1=asc, -1=desc
 
 const SEV = {
@@ -1028,12 +1028,10 @@ const SEV = {
 // Boot
 // ─────────────────────────────────────────────────────────────
 (function boot() {
-  // Try fetch first
   fetch('./searches.json')
     .then(r => { if (!r.ok) throw new Error(r.statusText); return r.json(); })
     .then(init)
     .catch(() => {
-      // Show file picker fallback
       document.getElementById('loading-state').style.display = 'none';
       document.getElementById('file-picker-wrap').style.display = 'block';
     });
@@ -1127,14 +1125,12 @@ function init(data) {
     }
   });
 
-  // Wire filters
   const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
   document.getElementById('searchInput').addEventListener('input', debounce(applyFilters, 180));
   ['statusFilter','schedFilter','detTypeFilter','csEnabledFilter'].forEach(id =>
     document.getElementById(id).addEventListener('change', applyFilters)
   );
 
-  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') {
       if (document.getElementById('cmp-modal').classList.contains('on')) { closeCompareModal(); return; }
@@ -1147,6 +1143,7 @@ function init(data) {
   });
 
   document.getElementById('loading-state').style.display = 'none';
+  renderListHead();
   applyFilters();
 }
 
@@ -1176,7 +1173,6 @@ function applyFilters() {
   PAGE = 1;
   sortFiltered();
   renderStats();
-  renderListHead();
   renderPage();
 }
 
@@ -1206,13 +1202,11 @@ function updateAppBtn() {
   }
 }
 
-function appSelectAll() {
+function clearAppSelection() {
   selectedApps.clear();
   document.querySelectorAll('#appList input[type=checkbox]').forEach(cb => cb.checked = false);
   updateAppBtn(); applyFilters();
 }
-
-function appClearSel() { appSelectAll(); }
 
 function filterAppList() {
   const q = document.getElementById('appSearchInput').value.toLowerCase();
@@ -1247,13 +1241,11 @@ function updateActionBtn() {
   }
 }
 
-function actionSelectAll() {
+function clearActionSelection() {
   selectedActions.clear();
   document.querySelectorAll('#actionList input[type=checkbox]').forEach(cb => cb.checked = false);
   updateActionBtn(); applyFilters();
 }
-
-function actionClearSel() { actionSelectAll(); }
 
 // ─────────────────────────────────────────────────────────────
 // Compare
@@ -1267,22 +1259,29 @@ function toggleCompare(id) {
     COMPARE.push(id);
   }
   renderCompareBar();
-  const start = (PAGE - 1) * PER_PAGE;
-  renderList(FILTERED.slice(start, start + PER_PAGE));
+  setCompareRowClass(id);
 }
 
 function removeCompare(idx) {
-  COMPARE.splice(idx, 1);
+  const [removedId] = COMPARE.splice(idx, 1);
   renderCompareBar();
-  const start = (PAGE - 1) * PER_PAGE;
-  renderList(FILTERED.slice(start, start + PER_PAGE));
+  if (removedId != null) setCompareRowClass(removedId);
 }
 
 function clearCompare() {
+  const prev = COMPARE;
   COMPARE = [];
   renderCompareBar();
-  const start = (PAGE - 1) * PER_PAGE;
-  renderList(FILTERED.slice(start, start + PER_PAGE));
+  prev.forEach(setCompareRowClass);
+}
+
+function setCompareRowClass(id) {
+  const row = document.getElementById(`lr-${id}`);
+  if (!row) return;
+  const inCompare = COMPARE.includes(id);
+  row.classList.toggle('cmp-sel', inCompare);
+  const btn = row.querySelector('.cmp-row-btn');
+  if (btn) btn.classList.toggle('on', inCompare);
 }
 
 function renderCompareBar() {
@@ -1295,8 +1294,8 @@ function renderCompareBar() {
   if (!COMPARE.length) { bar.classList.remove('on'); return; }
   bar.classList.add('on');
 
-  const sA = COMPARE[0] != null ? ALL.find(x => x._id === COMPARE[0]) : null;
-  const sB = COMPARE[1] != null ? ALL.find(x => x._id === COMPARE[1]) : null;
+  const sA = COMPARE[0] != null ? ALL[COMPARE[0]] : null;
+  const sB = COMPARE[1] != null ? ALL[COMPARE[1]] : null;
 
   pillA.style.display = sA ? 'flex' : 'none';
   if (sA) document.getElementById('cmp-pill-a-name').textContent = sA.name;
@@ -1309,8 +1308,8 @@ function renderCompareBar() {
 
 function openCompare() {
   if (COMPARE.length < 2) return;
-  const sA = ALL.find(x => x._id === COMPARE[0]);
-  const sB = ALL.find(x => x._id === COMPARE[1]);
+  const sA = ALL[COMPARE[0]];
+  const sB = ALL[COMPARE[1]];
   if (!sA || !sB) return;
   document.getElementById('cmp-name-a').textContent = sA.name;
   document.getElementById('cmp-name-b').textContent = sB.name;
@@ -1358,15 +1357,15 @@ function buildCompareSections(sA, sB) {
   sections.push({ title: 'Metadata', rows: [
     { key: 'app',       valA: sA._app,                             valB: sB._app },
     { key: 'author',    valA: sA.author || null,                   valB: sB.author || null },
-    { key: 'updated',   valA: sA.updated ? new Date(sA.updated).toLocaleString() : null,
-                        valB: sB.updated ? new Date(sB.updated).toLocaleString() : null },
+    { key: 'updated',   valA: sA.updated ? fmtDateTime(sA.updated) : null,
+                        valB: sB.updated ? fmtDateTime(sB.updated) : null },
     { key: 'enabled',   valA: String(!sA._disabled),               valB: String(!sB._disabled) },
     { key: 'scheduled', valA: String(sA._scheduled),               valB: String(sB._scheduled) },
     { key: 'actions',   valA: sA._actions.join(', ') || null,      valB: sB._actions.join(', ') || null },
   ]});
 
-  const gA = groupContentRaw(sA.content || {});
-  const gB = groupContentRaw(sB.content || {});
+  const gA = groupContent(sA.content || {}, { raw: true });
+  const gB = groupContent(sB.content || {}, { raw: true });
 
   const namedGroups = [
     ['Schedule',      gA.schedule,      gB.schedule],
@@ -1395,43 +1394,6 @@ function buildCompareSections(sA, sB) {
   return sections;
 }
 
-function groupContentRaw(c) {
-  // Like groupContent but without filtering — keeps false/0/empty values for comparison
-  const SCHEDULE = new Set(['is_scheduled','cron_schedule','schedule_window','schedule_priority',
-    'schedule_as','next_scheduled_time','realtime_schedule','run_on_startup','run_n_times',
-    'max_concurrent','allow_skew','allow_data_time_skew','defer_scheduled_searchable_idxc',
-    'skip_scheduled_realtime_idxc','restart_on_searchpeer_add']);
-  const SUPPRESS_KEYS = new Set(['alert.suppress','alert.suppress.fields','alert.suppress.group_name','alert.suppress.period']);
-  const SKIP = new Set(['search','qualifiedSearch','description','eai:acl','vsid',
-    'request.ui_dispatch_app','request.ui_dispatch_view','displayview',
-    'workload_pool','precalculate_required_fields_for_alerts',
-    'calculate_alert_required_fields_in_search','embed.enabled','federated_providers',
-    'durable.backfill_type','durable.lag_time','durable.max_backfill_intervals',
-    'durable.track_time_type','triggered_alert_count','related_dashboard','indicator_name']);
-
-  const groups = { schedule:{}, alertSettings:{}, suppress:{}, dispatch:{}, autoSum:{}, other:{} };
-  const actionGroups = {};
-
-  for (const [k, v] of Object.entries(c)) {
-    if (SKIP.has(k)) continue;
-    if (SCHEDULE.has(k))      { groups.schedule[k] = v; continue; }
-    if (SUPPRESS_KEYS.has(k)) { groups.suppress[k] = v; continue; }
-    if (k.startsWith('alert') || k === 'actions') { groups.alertSettings[k] = v; continue; }
-    if (k.startsWith('action.')) {
-      const type = k.split('.')[1];
-      if (!actionGroups[type]) actionGroups[type] = {};
-      actionGroups[type][k] = v;
-      continue;
-    }
-    if (k.startsWith('dispatch') || k === 'dispatchAs') { groups.dispatch[k] = v; continue; }
-    if (k.startsWith('auto_summarize')) { groups.autoSum[k] = v; continue; }
-    if (k.startsWith('display')) continue; // skip UI-only noise
-    groups.other[k] = v;
-  }
-
-  return { ...groups, actionGroups };
-}
-
 // ─────────────────────────────────────────────────────────────
 // Sort
 // ─────────────────────────────────────────────────────────────
@@ -1439,7 +1401,7 @@ const SORT_COLS = [
   { key: 'name',    label: 'Name / Description', val: s => s._name_lc },
   { key: 'app',     label: 'App',                val: s => (s._app || '').toLowerCase() },
   { key: 'status',  label: 'Status',             val: s => s._disabled ? 1 : 0 },
-{ key: 'actions', label: 'Actions',            val: s => (s._actions || []).length },
+  { key: 'actions', label: 'Actions',            val: s => s._actions.length },
   { key: 'updated', label: 'Updated',            val: s => s.updated || '' },
 ];
 
@@ -1521,17 +1483,14 @@ function renderList(items) {
   }
   body.innerHTML = items.map(s => {
     const c = s.content || {};
-    const statusTag = s._disabled
-      ? `<span class="tag tag-disabled">Disabled</span>`
-      : `<span class="tag tag-enabled">Enabled</span>`;
-const updated = s.updated ? fmtDate(s.updated) : '—';
+    const updated = s.updated ? fmtDate(s.updated) : '—';
     const desc = c.description
       ? `<div class="row-desc">${esc(c.description.slice(0,90))}${c.description.length>90?'…':''}</div>`
       : '';
     const stateClass = s._disabled ? 'disabled-row' : 'enabled';
     const selClass = SELECTED === s._id ? ' sel' : '';
     const cmpClass = COMPARE.includes(s._id) ? ' cmp-sel' : '';
-    const actionTags = (s._actions || []).length
+    const actionTags = s._actions.length
       ? `<div class="row-actions">${s._actions.map(a =>
           `<span class="tag-action">${esc(ACTION_LABELS[a] || a)}</span>`
         ).join('')}</div>`
@@ -1549,7 +1508,7 @@ const updated = s.updated ? fmtDate(s.updated) : '—';
         </div>
       </div>
       <div class="row-app">${esc(s._app)}</div>
-      <div>${statusTag}</div>
+      <div>${statusTag(s._disabled)}</div>
       <div>${actionTags}</div>
       <div class="row-updated">${esc(updated)}</div>
     </div>`;
@@ -1569,9 +1528,6 @@ function renderCards(items) {
     const c = s.content || {};
     const stateClass = s._disabled ? 'disabled-row' : 'enabled';
     const selClass = SELECTED === s._id ? ' sel' : '';
-    const statusTag = s._disabled
-      ? `<span class="tag tag-disabled">Disabled</span>`
-      : `<span class="tag tag-enabled">Enabled</span>`;
     const sevTag = s._sev && SEV[s._sev]
       ? `<span class="tag ${SEV[s._sev].cls}">${SEV[s._sev].label}</span>`
       : '';
@@ -1587,7 +1543,7 @@ function renderCards(items) {
         <div class="card-name">${esc(s.name)}</div>
         <div class="card-app">${esc(s._app)}</div>
       </div>
-      <div style="display:flex;gap:5px;flex-wrap:wrap">${statusTag}${sevTag}${s._scheduled?'<span class="tag tag-sched">Scheduled</span>':''}</div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap">${statusTag(s._disabled)}${sevTag}${s._scheduled?'<span class="tag tag-sched">Scheduled</span>':''}</div>
       ${desc}
       ${splSnippet}
       <div class="card-footer">
@@ -1650,53 +1606,51 @@ function setView(v) {
 // Drawer
 // ─────────────────────────────────────────────────────────────
 function selectSearch(id) {
-  SELECTED = id;
-  const s = ALL.find(x => x._id === id);
+  const s = ALL[id];
   if (!s) return;
+  const prevId = SELECTED;
+  SELECTED = id;
   renderDrawer(s);
   document.getElementById('drawer').classList.add('on');
   document.getElementById('overlay').classList.add('on');
-  // Update active states
-  document.querySelectorAll('[id^="lr-"],[id^="cd-"]').forEach(el => el.classList.remove('sel'));
-  const el = document.getElementById(`lr-${id}`) || document.getElementById(`cd-${id}`);
-  if (el) el.classList.add('sel');
+  if (prevId != null) setSelectedClass(prevId, false);
+  setSelectedClass(id, true);
 }
 
 function closeDrawer() {
+  const prevId = SELECTED;
   SELECTED = null;
   document.getElementById('drawer').classList.remove('on');
   document.getElementById('overlay').classList.remove('on');
-  document.querySelectorAll('[id^="lr-"],[id^="cd-"]').forEach(el => el.classList.remove('sel'));
+  if (prevId != null) setSelectedClass(prevId, false);
+}
+
+function setSelectedClass(id, on) {
+  const el = document.getElementById(`lr-${id}`) || document.getElementById(`cd-${id}`);
+  if (el) el.classList.toggle('sel', on);
 }
 
 function renderDrawer(s) {
   const c = s.content || {};
 
-  // Header
   document.getElementById('drawer-title').textContent = s.name;
   document.getElementById('drawer-app').textContent = s._app + (s.author ? '  ·  ' + s.author : '');
 
-  const badges = [];
-  badges.push(s._disabled
-    ? `<span class="tag tag-disabled">Disabled</span>`
-    : `<span class="tag tag-enabled">Enabled</span>`);
+  const badges = [statusTag(s._disabled)];
   if (s._scheduled) badges.push(`<span class="tag tag-sched">Scheduled</span>`);
   if (s._sev && SEV[s._sev]) badges.push(`<span class="tag ${SEV[s._sev].cls}">${s._sev} · ${SEV[s._sev].label}</span>`);
   document.getElementById('drawer-badges').innerHTML = badges.join('');
 
-  // Body
   const { actionGroups, ...groups } = groupContent(c);
   let html = '';
 
-  // Description
   if (c.description) {
     html += `<div class="desc-box">${esc(c.description)}</div>`;
   }
 
-  // Core meta grid
   const metaFields = [
     ['App',      s._app],
-    ['Updated',  s.updated ? new Date(s.updated).toLocaleString() : null],
+    ['Updated',  s.updated ? fmtDateTime(s.updated) : null],
     ['Actions',  c.actions || null],
     ['Next Run', c.next_scheduled_time || null],
     ['Related Dashboard', c.related_dashboard || null],
@@ -1712,7 +1666,6 @@ function renderDrawer(s) {
     ).join('')}</div>`;
   }
 
-  // SPL
   const spl = c.search || c.qualifiedSearch || '';
   if (spl) {
     html += `<div>
@@ -1724,7 +1677,6 @@ function renderDrawer(s) {
     </div>`;
   }
 
-  // Collapsible sections
   html += section('Schedule',         groups.schedule,      'sched',    false);
   html += section('Alert Settings',   groups.alertSettings, 'alertset', false);
   html += section('Suppression',      groups.suppress,      'suppress', false);
@@ -1842,25 +1794,28 @@ const ACTION_LABELS = {
   webhook: 'Webhook',
 };
 
-function groupContent(c) {
-  const SCHEDULE = new Set(['is_scheduled','cron_schedule','schedule_window','schedule_priority',
-    'schedule_as','next_scheduled_time','realtime_schedule','run_on_startup','run_n_times',
-    'max_concurrent','allow_skew','allow_data_time_skew','defer_scheduled_searchable_idxc',
-    'skip_scheduled_realtime_idxc','restart_on_searchpeer_add']);
-  const SKIP = new Set(['search','qualifiedSearch','description','disabled','is_visible',
-    'eai:acl','vsid','workload_pool','precalculate_required_fields_for_alerts',
-    'calculate_alert_required_fields_in_search','embed.enabled','federated_providers',
-    'request.ui_dispatch_app','request.ui_dispatch_view','displayview',
-    'durable.backfill_type','durable.lag_time','durable.max_backfill_intervals',
-    'durable.track_time_type','triggered_alert_count','related_dashboard','indicator_name']);
-  const SUPPRESS_KEYS = new Set(['alert.suppress','alert.suppress.fields','alert.suppress.group_name','alert.suppress.period']);
+const SCHEDULE_KEYS = new Set(['is_scheduled','cron_schedule','schedule_window','schedule_priority',
+  'schedule_as','next_scheduled_time','realtime_schedule','run_on_startup','run_n_times',
+  'max_concurrent','allow_skew','allow_data_time_skew','defer_scheduled_searchable_idxc',
+  'skip_scheduled_realtime_idxc','restart_on_searchpeer_add']);
+const SUPPRESS_KEYS = new Set(['alert.suppress','alert.suppress.fields','alert.suppress.group_name','alert.suppress.period']);
+const SKIP_KEYS_BASE = new Set(['search','qualifiedSearch','description','eai:acl','vsid',
+  'request.ui_dispatch_app','request.ui_dispatch_view','displayview',
+  'workload_pool','precalculate_required_fields_for_alerts',
+  'calculate_alert_required_fields_in_search','embed.enabled','federated_providers',
+  'durable.backfill_type','durable.lag_time','durable.max_backfill_intervals',
+  'durable.track_time_type','triggered_alert_count','related_dashboard','indicator_name']);
+const SKIP_KEYS_DRAWER = new Set([...SKIP_KEYS_BASE, 'disabled','is_visible']);
 
+// raw=true: preserves false/0/empty values for comparison; omits display group
+function groupContent(c, { raw = false } = {}) {
+  const skip = raw ? SKIP_KEYS_BASE : SKIP_KEYS_DRAWER;
   const groups = { schedule:{}, alertSettings:{}, suppress:{}, dispatch:{}, autoSum:{}, display:{}, other:{} };
-  const actionGroups = {}; // keyed by action type e.g. 'email', 'notable'
+  const actionGroups = {};
 
   for (const [k, v] of Object.entries(c)) {
-    if (SKIP.has(k)) continue;
-    if (SCHEDULE.has(k))           { groups.schedule[k] = v; continue; }
+    if (skip.has(k)) continue;
+    if (SCHEDULE_KEYS.has(k))      { groups.schedule[k] = v; continue; }
     if (SUPPRESS_KEYS.has(k))      { groups.suppress[k] = v; continue; }
     if (k.startsWith('alert') || k === 'actions') { groups.alertSettings[k] = v; continue; }
     if (k.startsWith('action.')) {
@@ -1871,19 +1826,26 @@ function groupContent(c) {
     }
     if (k.startsWith('dispatch') || k === 'dispatchAs') { groups.dispatch[k] = v; continue; }
     if (k.startsWith('auto_summarize')) { groups.autoSum[k] = v; continue; }
-    if (k.startsWith('display'))   { groups.display[k] = v; continue; }
+    if (k.startsWith('display')) {
+      if (raw) continue;
+      groups.display[k] = v;
+      continue;
+    }
     groups.other[k] = v;
   }
 
-  // Filter empty/null/boring values
+  if (raw) {
+    const { display, ...rest } = groups;
+    return { ...rest, actionGroups };
+  }
+
   for (const gname of ['schedule','alertSettings','suppress','dispatch','autoSum','other']) {
     groups[gname] = filterMeaningful(groups[gname]);
   }
-  // Display: keep all (collapsed, low signal)
+  // Display group is kept collapsed rather than filtered — low-signal UI state
   groups.display = Object.fromEntries(
     Object.entries(groups.display).filter(([,v]) => v !== null && v !== undefined)
   );
-  // Filter each action group; drop entirely if nothing meaningful remains
   for (const [type, fields] of Object.entries(actionGroups)) {
     const filtered = filterMeaningful(fields);
     if (Object.keys(filtered).length) actionGroups[type] = filtered;
@@ -1898,7 +1860,6 @@ function filterMeaningful(obj) {
     Object.entries(obj).filter(([k, v]) => {
       if (v === null || v === undefined || v === '') return false;
       if (v === false || v === 'false' || v === '0' || v === 0) return false;
-      // Keep non-zero numbers, non-false booleans, non-empty strings
       return true;
     })
   );
@@ -1941,6 +1902,18 @@ function fmtDate(iso) {
   try {
     return new Date(iso).toLocaleDateString('en-GB', {day:'2-digit',month:'short',year:'numeric'});
   } catch { return iso; }
+}
+
+function fmtDateTime(iso) {
+  try {
+    return new Date(iso).toLocaleString();
+  } catch { return iso; }
+}
+
+function statusTag(disabled) {
+  return disabled
+    ? `<span class="tag tag-disabled">Disabled</span>`
+    : `<span class="tag tag-enabled">Enabled</span>`;
 }
 
 function copySpl(btn) {
