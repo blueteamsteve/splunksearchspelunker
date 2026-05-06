@@ -841,6 +841,16 @@
 
     <div class="filter-row" id="filter-row"></div>
 
+    <input type="file" id="loadInput" accept=".json" style="display:none">
+    <button class="exportbtn" id="loadBtn" onclick="document.getElementById('loadInput').click()" title="Load a different searches JSON file">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="17 8 12 3 7 8"/>
+        <line x1="12" y1="3" x2="12" y2="15"/>
+      </svg>
+      Load
+    </button>
+
     <button class="exportbtn" id="exportBtn" onclick="exportFiltered()" title="Download filtered searches as Splunk-format JSON" disabled>
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -1023,40 +1033,28 @@ const SEV = {
     };
     reader.readAsText(file);
   });
+
+  document.getElementById('loadInput').addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (RAW) loadData(data); else init(data);
+      } catch (err) {
+        alert('Failed to parse JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
 })();
 
 function init(data) {
-  RAW = data;
-  ALL = (data.entry || []).map((e, i) => {
-    const c = e.content || {};
-    const actions = Object.keys(c)
-      .filter(k => /^action\.[^.]+$/.test(k) && (c[k] === '1' || c[k] === true))
-      .map(k => k.slice(7));
-    return {
-      ...e,
-      _id: i,
-      _app: e.acl?.app || '',
-      _disabled: c.disabled === true || c.disabled === 'true' || c.disabled === 1,
-      _scheduled: c.is_scheduled === true || c.is_scheduled === 'true' || c.is_scheduled === 1,
-      _sev: c['alert.severity'] ? Number(c['alert.severity']) : null,
-      _search_lc: (c.search || '').toLowerCase(),
-      _desc_lc: (c.description || '').toLowerCase(),
-      _name_lc: (e.name || '').toLowerCase(),
-      _author_lc: (e.author || '').toLowerCase(),
-      _det_type: c['action.correlationsearch.detection_type'] ?? '',
-      _cs_enabled: c['action.correlationsearch.enabled'] ?? '',
-      _actions: actions,
-    };
-  });
-
-  // Mount all filter facets into the filter row
+  // Mount filter facets (one-time DOM scaffolding)
   const filterRow = document.getElementById('filter-row');
-  FACETS.forEach(f => {
-    f.selected = new Set(f.initial || []);
-    filterRow.appendChild(buildFacet(f));
-    populateFacetOptions(f);
-    updateFacetButton(f);
-  });
+  FACETS.forEach(f => filterRow.appendChild(buildFacet(f)));
 
   // Close any open menu when clicking outside its wrap
   document.addEventListener('click', e => {
@@ -1083,6 +1081,53 @@ function init(data) {
   });
 
   document.getElementById('loading-state').style.display = 'none';
+  renderListHead();
+  loadData(data);
+}
+
+function loadData(data) {
+  RAW = data;
+  ALL = (data.entry || []).map((e, i) => {
+    const c = e.content || {};
+    const actions = Object.keys(c)
+      .filter(k => /^action\.[^.]+$/.test(k) && (c[k] === '1' || c[k] === true))
+      .map(k => k.slice(7));
+    return {
+      ...e,
+      _id: i,
+      _app: e.acl?.app || '',
+      _disabled: c.disabled === true || c.disabled === 'true' || c.disabled === 1,
+      _scheduled: c.is_scheduled === true || c.is_scheduled === 'true' || c.is_scheduled === 1,
+      _sev: c['alert.severity'] ? Number(c['alert.severity']) : null,
+      _search_lc: (c.search || '').toLowerCase(),
+      _desc_lc: (c.description || '').toLowerCase(),
+      _name_lc: (e.name || '').toLowerCase(),
+      _author_lc: (e.author || '').toLowerCase(),
+      _det_type: c['action.correlationsearch.detection_type'] ?? '',
+      _cs_enabled: c['action.correlationsearch.enabled'] ?? '',
+      _actions: actions,
+    };
+  });
+
+  // Reset transient state so the new dataset starts clean
+  COMPARE = [];
+  SELECTED = null;
+  PAGE = 1;
+  SORT = { col: null, dir: 1 };
+  document.getElementById('drawer').classList.remove('on');
+  document.getElementById('overlay').classList.remove('on');
+  renderCompareBar();
+  document.getElementById('searchInput').value = '';
+
+  // Reset facet selections and rebuild option lists from the new data
+  FACETS.forEach(f => {
+    f.selected = new Set(f.initial || []);
+    const list = document.getElementById(f.key + 'List');
+    if (list) list.innerHTML = '';
+    populateFacetOptions(f);
+    updateFacetButton(f);
+  });
+
   renderListHead();
   applyFilters();
 }
