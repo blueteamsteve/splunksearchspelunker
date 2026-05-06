@@ -220,6 +220,23 @@
     .vtbtn:hover { color: var(--text); border-color: var(--border); }
     .vtbtn.on { background: var(--elevated); border-color: var(--border); color: var(--amber); }
 
+    /* Export button */
+    .exportbtn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); border: 1px solid var(--border);
+      color: var(--text); cursor: pointer;
+      padding: 6px 10px; border-radius: 4px;
+      font-family: var(--font-ui); font-size: 0.85rem; font-weight: 500;
+      transition: all 0.15s; flex-shrink: 0;
+    }
+    .exportbtn:hover { border-color: var(--amber); color: var(--amber); }
+    .exportbtn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .exportbtn .count {
+      font-family: var(--font-mono); font-size: 0.72rem;
+      color: var(--muted);
+    }
+    .exportbtn:hover .count { color: var(--amber); }
+
     /* ─── Stats bar ──────────────────────────────────────── */
     #statsbar {
       background: var(--surface);
@@ -824,6 +841,15 @@
 
     <div class="filter-row" id="filter-row"></div>
 
+    <button class="exportbtn" id="exportBtn" onclick="exportFiltered()" title="Download filtered searches as Splunk-format JSON" disabled>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+        <polyline points="7 10 12 15 17 10"/>
+        <line x1="12" y1="15" x2="12" y2="3"/>
+      </svg>
+      Export <span class="count" id="exportCount">0</span>
+    </button>
+
     <div class="view-toggle">
       <button class="vtbtn on" id="btnList" onclick="setView('list')" title="List view">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -954,6 +980,7 @@
 // ─────────────────────────────────────────────────────────────
 let ALL = [];
 let FILTERED = [];
+let RAW = null;
 let VIEW = 'list';
 let PAGE = 1;
 let SELECTED = null;
@@ -999,6 +1026,7 @@ const SEV = {
 })();
 
 function init(data) {
+  RAW = data;
   ALL = (data.entry || []).map((e, i) => {
     const c = e.content || {};
     const actions = Object.keys(c)
@@ -1475,6 +1503,32 @@ function renderStats() {
     `<span style="color:var(--green)">${enabled.toLocaleString()} enabled</span>` +
     ` <span class="stat-sep"> · </span>` +
     `<span style="color:var(--blue)">${sched.toLocaleString()} scheduled</span>`;
+
+  const exportBtn = document.getElementById('exportBtn');
+  exportBtn.disabled = shown === 0;
+  document.getElementById('exportCount').textContent = shown.toLocaleString();
+}
+
+function exportFiltered() {
+  if (!RAW || !FILTERED.length) return;
+
+  const stripped = FILTERED.map(s => {
+    const out = {};
+    for (const k in s) if (!k.startsWith('_')) out[k] = s[k];
+    return out;
+  });
+
+  const out = { ...RAW, entry: stripped, total: stripped.length };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `searches-filtered-${stamp}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 function renderPage() {
